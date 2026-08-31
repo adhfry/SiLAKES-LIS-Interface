@@ -1,0 +1,23 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SiLAKES LIS Plus Jakarta Sansface logo">
+  <defs>
+    <linearGradient id="silakesGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2bd3c8"/>
+      <stop offset="100%" stop-color="#00857d"/>
+    </linearGradient>
+  </defs>
+
+  <!-- droplet silhouette (identitas lab/sampel) -->
+  <path d="M60 8 C60 8 22 52 22 78 A38 38 0 0 0 98 78 C98 52 60 8 60 8 Z"
+        fill="url(#silakesGrad)" opacity="0.15"/>
+  <path d="M60 8 C60 8 22 52 22 78 A38 38 0 0 0 98 78 C98 52 60 8 60 8 Z"
+        fill="none" stroke="url(#silakesGrad)" stroke-width="2.5"/>
+
+  <!-- node kiri: alat (MC-200) -->
+  <circle id="nodeDevice" cx="42" cy="72" r="7" fill="#2bd3c8"/>
+  <!-- node kanan: SiLAKES API -->
+  <circle id="nodeSilakes" cx="78" cy="72" r="7" fill="#00857d"/>
+  <!-- garis penghubung / bridge -->
+  <line id="bridgeLine" x1="49" y1="72" x2="71" y2="72" stroke="url(#silakesGrad)" stroke-width="3" stroke-linecap="round"/>
+  <!-- pulse dot tengah (transmisi data) -->
+  <circle id="pulseDot" cx="60" cy="72" r="3.5" fill="#ffffff"/>
+</svg>

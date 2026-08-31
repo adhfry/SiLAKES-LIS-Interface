@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input,
+  textarea,
+  .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-neutral-50 text-neutral-900 font-sans antialiased transition-colors duration-300;
+    background: radial-gradient(circle at 50% -10%, #e1f5f0 0%, #f4fbf9 45%, #f8fafc 100%);
+  }
+  html.dark body {
+    @apply text-neutral-100;
+    background: radial-gradient(circle at 50% -10%, #16465e 0%, #0f172a 45%, #020617 100%);
+  }
+
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-neutral-300 dark:bg-neutral-700;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-neutral-400 dark:bg-neutral-600;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/70 dark:bg-neutral-800/60 backdrop-blur-xl border border-accent-900/[0.06] dark:border-white/[0.06] rounded-2xl shadow-glass dark:shadow-card transition-colors duration-300;
+  }
+
+  .btn-icon {
+    @apply inline-flex items-center justify-center rounded-lg transition-colors duration-150;
+  }
+}
+
+/* transisi generik dipakai beberapa komponen (fade + slide kecil) */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}

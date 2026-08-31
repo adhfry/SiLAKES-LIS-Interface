@@ -1,0 +1,22 @@
+<svg width="320" height="120" viewBox="0 0 320 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SiLAKES LIS Plus Jakarta Sansface">
+  <defs>
+    <linearGradient id="wmGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2bd3c8"/>
+      <stop offset="100%" stop-color="#00857d"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(0,0)">
+    <path d="M60 8 C60 8 22 52 22 78 A38 38 0 0 0 98 78 C98 52 60 8 60 8 Z"
+          fill="url(#wmGrad)" opacity="0.15"/>
+    <path d="M60 8 C60 8 22 52 22 78 A38 38 0 0 0 98 78 C98 52 60 8 60 8 Z"
+          fill="none" stroke="url(#wmGrad)" stroke-width="2.5"/>
+    <circle cx="42" cy="72" r="7" fill="#2bd3c8"/>
+    <circle cx="78" cy="72" r="7" fill="#00857d"/>
+    <line x1="49" y1="72" x2="71" y2="72" stroke="url(#wmGrad)" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="60" cy="72" r="3.5" fill="#ffffff"/>
+  </g>
+
+  <text x="118" y="58" font-family="Plus Jakarta Sans, Segoe UI, sans-serif" font-size="30" font-weight="700" fill="#0F172A">SiLAKES</text>
+  <text x="118" y="82" font-family="Plus Jakarta Sans, Segoe UI, sans-serif" font-size="15" font-weight="400" fill="#64748B" letter-spacing="0.5">LIS Plus Jakarta Sansface</text>
+</svg>
