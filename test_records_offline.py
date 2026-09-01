@@ -95,6 +95,38 @@ def test_parse_pending_worklist_astm():
     print(f"[OK] parse_pending_worklist_astm -> {parsed}")
 
 
+def test_parse_pending_worklist_astm_kode_berkelanjutan_per_hari():
+    """
+    BUG NYATA (2026-09-01, dilaporkan user): worklist baru SELALU mulai kode
+    dari 01 lagi, walau worklist SEBELUMNYA hari yg sama sudah pakai kode itu
+    (bahkan kalau baru berjarak beberapa menit) -- bridge menghitung kode dari
+    POSISI record P LOKAL per worklist, bukan baca field[1] record P itu
+    sendiri. Fix server: WorklistController::generateAstmContent sekarang
+    menomori BERKELANJUTAN per hari per device (worklist A -> 1..30, worklist
+    B lanjut 31..38, dst -- reset tiap ganti hari), field[1] record P jadi
+    angka itu. Fix bridge (test ini): WAJIB baca field[1] literal, bukan
+    hitung posisi lokal -- kalau tidak, kode di PDF Lembar Kerja tidak akan
+    pernah cocok dgn kode yg diharapkan bridge.
+    """
+    # Simulasikan worklist B yg dibuat SETELAH worklist A (30 pasien) hari yg
+    # sama -- server sekarang kirim field[1] mulai dari 31, BUKAN 1.
+    astm = (
+        "H|\\^&|||SiLAKES^HOST|||||P|1|20260901140000\r\n"
+        "P|31||P500-600||BUDI^SETIAWAN||19900101|M\r\n"
+        "O|1|||ALB|False||||||||||Serum|||||||||||||||\r\n"
+        "P|32||S77||SAMPEL^BANK||19000101|U\r\n"
+        "O|1|||UA|False||||||||||Serum|||||||||||||||\r\n"
+        "L||N"
+    )
+    parsed = R.parse_pending_worklist_astm(astm)
+    assert "31" in parsed, f"kode '31' (dari field[1] literal) harus ada, dapat: {list(parsed.keys())}"
+    assert "32" in parsed
+    assert "01" not in parsed, "TIDAK BOLEH kembali hitung dari 01 -- itu bug lama yg diperbaiki"
+    assert parsed["31"]["real_accession"] == "P500-600"
+    assert parsed["32"]["real_accession"] == "S77"
+    print(f"[OK] parse_pending_worklist_astm (kode berkelanjutan per hari) -> {parsed}")
+
+
 def main():
     tests = [
         test_parse_query,
@@ -102,6 +134,7 @@ def main():
         test_group_results_by_patient,
         test_build_silakes_output_astm_matches_server_parser_layout,
         test_parse_pending_worklist_astm,
+        test_parse_pending_worklist_astm_kode_berkelanjutan_per_hari,
     ]
     failed = 0
     for t in tests:

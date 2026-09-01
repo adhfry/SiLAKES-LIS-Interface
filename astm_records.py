@@ -143,7 +143,7 @@ def parse_pending_worklist_astm(astm_content: str) -> dict[str, dict]:
     lines = astm_content.replace("\r\n", "\n").split("\n")
     out: dict[str, dict] = {}
     current: str | None = None
-    seq = 0
+    fallback_seq = 0  # cadangan KALAU field[1] tidak berupa angka valid (seharusnya tidak pernah terjadi)
     for line in lines:
         line = line.strip()
         if not line:
@@ -154,7 +154,22 @@ def parse_pending_worklist_astm(astm_content: str) -> dict[str, dict]:
             real_accession = fields[3].strip() if len(fields) > 3 else ""
             name = fields[5].strip() if len(fields) > 5 else ""
             if real_accession:
-                seq += 1
+                # BUG NYATA (2026-09-01): sebelumnya kode pendek dihitung dari
+                # POSISI record P dalam astm_content INI SAJA (selalu 1,2,3...
+                # per worklist), bukan dibaca dari field[1] record P itu sendiri.
+                # Server (WorklistController::generateAstmContent) SEKARANG
+                # menomori kode BERKELANJUTAN per hari (bukan reset tiap
+                # worklist, lihat catatan di sana) supaya worklist baru tidak
+                # pernah rebutan kode dgn worklist lama hari yg sama -- kalau
+                # bridge di sini tetap hitung posisi lokal, kode di PDF Lembar
+                # Kerja (mis. "03") tidak akan pernah cocok dgn kode yg
+                # DIHARAPKAN bridge (tetap "01") -- operator ketik kode dari
+                # PDF, bridge tidak mengenalinya. WAJIB baca field[1] literal.
+                try:
+                    seq = int(fields[1].strip())
+                except (IndexError, ValueError):
+                    fallback_seq += 1
+                    seq = fallback_seq
                 current = f"{seq:02d}"
                 out[current] = {
                     "real_accession": real_accession,
