@@ -50,6 +50,19 @@
     @apply bg-white/70 dark:bg-neutral-800/60 backdrop-blur-xl border border-accent-900/[0.06] dark:border-white/[0.06] rounded-2xl shadow-glass dark:shadow-card transition-colors duration-300;
   }
 
+  /* Sama seperti .glass-panel TAPI background SOLID (bukan semi-transparan +
+     backdrop-blur) -- WAJIB dipakai utk panel modal yg duduk DI ATAS backdrop
+     gelap yang JUGA pakai backdrop-blur (SettingsModal/SendSampleModal). Dua
+     lapis backdrop-filter bertumpuk terbukti (insiden nyata, PC lapangan)
+     gagal render di sebagian kombinasi GPU/driver WebView2 -- backdrop gelap
+     tetap tampil, tapi panel di atasnya jadi tidak ter-render/transparan sama
+     sekali, walau elemen & event click-nya tetap ada (kelihatan spt "layar
+     redup ketutup backdrop, tidak bisa diapa-apakan"). Background solid tidak
+     bergantung pada backdrop-filter sama sekali -- selalu ter-render benar. */
+  .modal-panel {
+    @apply bg-white dark:bg-neutral-800 border border-accent-900/[0.06] dark:border-white/[0.06] rounded-2xl shadow-glass dark:shadow-card transition-colors duration-300;
+  }
+
   .btn-icon {
     @apply inline-flex items-center justify-center rounded-lg transition-colors duration-150;
   }

@@ -117,7 +117,7 @@ async function submit() {
       <div v-if="modelValue" class="fixed inset-0 z-40 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="!saving && close()" />
         <Transition name="modal-pop" appear>
-          <div class="glass-panel relative z-10 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+          <div class="modal-panel relative z-10 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center gap-2.5 mb-1">
               <IconSend :size="17" class="text-primary-600 dark:text-primary-400" />
               <h2 class="text-base font-heading font-bold text-neutral-900 dark:text-neutral-100">Kirim Sampel ke MC-200</h2>
