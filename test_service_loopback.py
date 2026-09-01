@@ -3,6 +3,7 @@ Sama seperti test_loopback.py tapi menguji BridgeService (service.py) --
 class controllable yang dipakai GUI -- bukan bridge_server.py versi CLI lama.
 Pastikan refactor start()/stop() tidak merusak logic yang sudah tervalidasi.
 """
+import atexit
 import socket
 import time
 
@@ -11,7 +12,17 @@ import silakes_client as api
 from astm_protocol import ENQ, ACK, EOT, build_frame
 from service import BridgeService
 
+# BUG NYATA (2026-09-01): save() menulis ke %APPDATA%\SiLAKES-MC200-Bridge\
+# settings.json -- file YANG SAMA dipakai aplikasi GUI asli, TIDAK ADA
+# isolasi test sama sekali. Menjalankan test ini sambil bridge asli sedang
+# aktif di lapangan diam-diam mengubah listen_host/listen_port-nya jadi
+# 127.0.0.1:17124 (tidak lagi bisa dihubungi MC-200 lewat jaringan) dan TIDAK
+# PERNAH dikembalikan -- baru ketahuan lewat insiden nyata. Snapshot dulu
+# settings asli SEBELUM ditimpa, kembalikan via atexit supaya selalu
+# ter-restore apa pun hasil test-nya (lulus/gagal/exception).
+_original_settings = _settings.load()
 _settings.save({"listen_port": 17124, "listen_host": "127.0.0.1"})
+atexit.register(lambda: _settings.save(_original_settings))
 HOST = "127.0.0.1"
 
 calls = {"mark_processing": [], "post_output": [], "monitor": []}

@@ -23,6 +23,23 @@ log = logging.getLogger("bridge")
 
 
 class BridgeService:
+    # Kode pendek dianggap "milik worklist yang masih genuinely aktif" cuma
+    # selama ini sejak terakhir di-cache. BUG NYATA (2026-09-01, laporan user):
+    # _pending_cache tidak pernah dibersihkan sama sekali -- begitu worklist
+    # lama (mis. sampel "Ahda", kode 01) selesai diproses, entrinya tetap
+    # nyangkut selamanya. Server /v3/lis/agent/pending CUMA balikin worklist
+    # status='pending' (langsung berubah jadi 'downloaded' begitu bridge poll
+    # sekali), jadi TIDAK BISA dipakai sbg sinyal "worklist X masih dikerjakan"
+    # -- worklist yg SEDANG aktif diproses operator pun sudah lama hilang dari
+    # hasil /pending. Makanya deteksi kadaluarsa di sini pakai umur cache
+    # (waktu sejak terakhir di-cache), bukan status server. 4 jam jauh lebih
+    # dari cukup utk 1 sesi kerja 1 worklist (operator print lembar kerja,
+    # ketik kode di alat, tunggu hasil -- biasanya selesai dlm hitungan menit
+    # sampai puluhan menit), tapi cukup pendek utk memastikan worklist baru yg
+    # dibuat berikutnya (kode ulang dari 01) tidak pernah tersandera worklist
+    # lama yg sudah lama beres.
+    CACHE_ENTRY_MAX_AGE_SECONDS = 4 * 3600
+
     def __init__(self, on_stats_change=None):
         """
         on_stats_change: callback(stats_dict) dipanggil tiap kali stats berubah
@@ -139,6 +156,7 @@ class BridgeService:
                 "filename": f"manual_{accession}.astm",
                 "name": name or accession,
                 "tests": list(tests),
+                "cached_at": time.time(),
             }
         log.info("Sampel manual ditambahkan ke cache: accession=%s tests=%s", accession, tests)
         return {"accession": accession, "tests": tests}
@@ -176,20 +194,31 @@ class BridgeService:
                         for short_code, info in parsed.items():
                             existing = self._pending_cache.get(short_code)
                             if existing and existing.get("worklist_id") not in (None, wl_id):
-                                # Kode pendek ini kepakai worklist LAIN yg masih pending --
-                                # tabrakan (jarang terjadi, cuma kalau >1 worklist nunggu
-                                # bersamaan). Jangan timpa diam-diam, cukup log biar kelihatan.
-                                log.warning(
-                                    "Kode pendek %s tabrakan: worklist #%s vs #%s -- entri lama dipertahankan.",
-                                    short_code, existing.get("worklist_id"), wl_id,
+                                age = time.time() - existing.get("cached_at", 0)
+                                if age < self.CACHE_ENTRY_MAX_AGE_SECONDS:
+                                    # Kode pendek ini kepakai worklist LAIN yg masih
+                                    # cukup baru (kemungkinan genuinely masih
+                                    # dikerjakan bersamaan) -- jangan timpa diam-diam,
+                                    # cukup log biar kelihatan.
+                                    log.warning(
+                                        "Kode pendek %s tabrakan: worklist #%s (umur %.0f menit) vs #%s -- entri lama dipertahankan.",
+                                        short_code, existing.get("worklist_id"), age / 60, wl_id,
+                                    )
+                                    continue
+                                # Entri lama sudah lebih dari CACHE_ENTRY_MAX_AGE_SECONDS
+                                # -- worklist itu nyaris pasti sudah lama beres/
+                                # ditinggalkan, aman digantikan worklist baru ini.
+                                log.info(
+                                    "Kode pendek %s sebelumnya milik worklist #%s (umur %.0f menit, kadaluarsa) -- digantikan worklist baru #%s.",
+                                    short_code, existing.get("worklist_id"), age / 60, wl_id,
                                 )
-                                continue
                             self._pending_cache[short_code] = {
                                 "worklist_id": wl_id,
                                 "filename": filename,
                                 "name": info["name"],
                                 "tests": info["tests"],
                                 "real_accession": info["real_accession"],
+                                "cached_at": time.time(),
                             }
 
                     if parsed:

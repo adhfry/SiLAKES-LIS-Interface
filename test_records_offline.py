@@ -82,10 +82,16 @@ def test_parse_pending_worklist_astm():
         "O|2|||UA|False||||||||||Serum|||||||||||||||\r\n"
         "L||N"
     )
+    # BARU (fitur kode pendek, lihat RESEARCH_LOG.md 2026-08-31): hasil di-key
+    # pakai KODE PENDEK 2-digit ("01","02",...) sesuai urutan record P, BUKAN
+    # accession asli lagi -- accession asli sekarang ada di sub-key
+    # "real_accession". Test ini sempat basi (tidak di-update sejak refactor
+    # itu) sampai ditemukan lewat kegagalan nyata saat menjalankan test suite.
     parsed = R.parse_pending_worklist_astm(astm)
-    assert "P194-20" in parsed
-    assert parsed["P194-20"]["tests"] == ["ALB", "UA"], parsed
-    assert "DOE" in parsed["P194-20"]["name"]
+    assert "01" in parsed
+    assert parsed["01"]["real_accession"] == "P194-20"
+    assert parsed["01"]["tests"] == ["ALB", "UA"], parsed
+    assert "DOE" in parsed["01"]["name"]
     print(f"[OK] parse_pending_worklist_astm -> {parsed}")
 
 
