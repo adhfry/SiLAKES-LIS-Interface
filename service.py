@@ -8,7 +8,9 @@ plus emit event terstruktur (log + stats) ke callback utk ditampilkan real-time.
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
 import socket
 import threading
 import time
@@ -40,6 +42,22 @@ class BridgeService:
     # lama yg sudah lama beres.
     CACHE_ENTRY_MAX_AGE_SECONDS = 4 * 3600
 
+    # BUG NYATA (2026-09-01, ditemukan lewat pertanyaan user "kalau folder app
+    # ditimpa dgn versi baru, apakah hasil dari alat masih bisa nyambung?"):
+    # _pending_cache SEBELUMNYA cuma hidup di memori proses. Kalau app di-stop
+    # (wajib, utk timpa/update file exe) lalu dijalankan ulang -- baik krn
+    # update biasa, crash, atau restart PC -- cache kosong lagi. Server
+    # /v3/lis/agent/pending CUMA balikin worklist status='pending' (worklist
+    # yg SEDANG diproses, sudah pernah di-download sekali, TIDAK PERNAH
+    # muncul lagi di situ) -- jadi worklist yg lagi jalan pas restart TIDAK
+    # OTOMATIS ke-cache ulang, hasil dari alat yg pakai kode pendek worklist
+    # itu akan gagal disambungkan ke pasien yg benar (fallback di
+    # _handle_results cuma pakai kode mentah sbg accession, pasti ditolak
+    # server). Simpan ke file lokal (folder sama dgn settings.json, DI LUAR
+    # folder app -- jadi selamat dari "timpa folder") supaya cache selalu
+    # tahan restart di PC yang sama.
+    _CACHE_FILE_PATH = os.path.join(_settings.APPDATA_DIR, "pending_cache.json")
+
     def __init__(self, on_stats_change=None):
         """
         on_stats_change: callback(stats_dict) dipanggil tiap kali stats berubah
@@ -53,6 +71,7 @@ class BridgeService:
         self._cache_lock = threading.Lock()
         self._pending_cache: dict[str, dict] = {}
         self._on_stats_change = on_stats_change
+        self._load_cache_from_disk()
 
         self._started_at: datetime | None = None
         self.stats = {
@@ -158,6 +177,7 @@ class BridgeService:
                 "tests": list(tests),
                 "cached_at": time.time(),
             }
+            self._save_cache_to_disk()
         log.info("Sampel manual ditambahkan ke cache: accession=%s tests=%s", accession, tests)
         return {"accession": accession, "tests": tests}
 
@@ -173,6 +193,42 @@ class BridgeService:
 
     def _touch_activity(self):
         self.stats["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    # ------------------------------------------------------------------ #
+    # persist _pending_cache ke disk (tahan restart app di PC yang sama --
+    # lihat catatan panjang di CACHE_ENTRY_MAX_AGE_SECONDS/_CACHE_FILE_PATH)
+    # ------------------------------------------------------------------ #
+    def _load_cache_from_disk(self):
+        try:
+            if not os.path.exists(self._CACHE_FILE_PATH):
+                return
+            with open(self._CACHE_FILE_PATH, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            now = time.time()
+            loaded = 0
+            for short_code, info in raw.items():
+                # Buang yg sudah kadaluarsa SAAT MEMUAT juga -- kalau app
+                # ditutup lama (mis. dimatikan semalaman), jangan resurrect
+                # entri yg memang sudah seharusnya basi.
+                if now - info.get("cached_at", 0) < self.CACHE_ENTRY_MAX_AGE_SECONDS:
+                    self._pending_cache[short_code] = info
+                    loaded += 1
+            if loaded:
+                log.info("Cache kode pendek dimuat dari file (%d entri, dari sesi sebelumnya).", loaded)
+        except Exception as e:
+            log.warning("Gagal memuat cache kode pendek dari file (%s) -- mulai dari cache kosong: %s", self._CACHE_FILE_PATH, e)
+
+    def _save_cache_to_disk(self):
+        """WAJIB dipanggil dari dalam `with self._cache_lock:` yang sama dgn
+        mutasi cache-nya, supaya file selalu konsisten dgn isi memori."""
+        try:
+            os.makedirs(_settings.APPDATA_DIR, exist_ok=True)
+            tmp_path = self._CACHE_FILE_PATH + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(self._pending_cache, f)
+            os.replace(tmp_path, self._CACHE_FILE_PATH)  # atomic di Windows & POSIX
+        except Exception as e:
+            log.warning("Gagal simpan cache kode pendek ke file: %s", e)
 
     # ------------------------------------------------------------------ #
     # polling worklist pending
@@ -220,6 +276,8 @@ class BridgeService:
                                 "real_accession": info["real_accession"],
                                 "cached_at": time.time(),
                             }
+                        if parsed:
+                            self._save_cache_to_disk()
 
                     if parsed:
                         log.info("Worklist #%s (%s) di-cache: %d kode pendek", wl_id, filename, len(parsed))
