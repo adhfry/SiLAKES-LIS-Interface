@@ -6,8 +6,11 @@ CheckData/20260311/ASTM_LIS_CHeck_Sent.txt (software SAGES200 / MC-200).
 """
 from __future__ import annotations
 
+import logging
 import socket
 import time
+
+log = logging.getLogger("bridge.astm")
 
 ENQ = b"\x05"
 ACK = b"\x06"
@@ -74,6 +77,17 @@ def parse_frame(raw: bytes) -> tuple[int, str] | None:
     return fn, text
 
 
+class AstmFrameError(Exception):
+    """1 frame gagal diparse (checksum salah / ETX tidak ketemu / format rusak)
+    -- BUKAN akhir transmisi. Caller WAJIB NAK supaya sender (MC-200)
+    retransmit frame yang sama, sesuai ASTM E1394-97."""
+
+
+class AstmProtocolError(Exception):
+    """Kondisi protokol tidak wajar yang bridge sengaja tolak lanjutkan
+    (mis. frame korup berturut-turut, atau transmisi tidak pernah EOT)."""
+
+
 class AstmSession:
     """
     Wrapper tipis di atas socket TCP untuk 1 koneksi MC-200 <-> bridge.
@@ -125,7 +139,23 @@ class AstmSession:
         self.send(NAK)
 
     def read_one_frame(self) -> tuple[int, str] | None:
-        """Baca 1 frame STX...CRLF penuh, kembalikan (frame_number, text) atau None kalau EOT."""
+        """
+        Baca 1 frame STX...CRLF penuh.
+        Return (frame_number, text) kalau valid, atau None kalau EOT beneran.
+        Raise AstmFrameError kalau byte pertama STX tapi checksum/format
+        frame-nya rusak -- BUKAN EOT, caller wajib NAK (lihat read_record_set).
+
+        BUG NYATA (2026-09-02, laporan user): sebelumnya frame rusak
+        DIPERLAKUKAN SAMA PERSIS dengan EOT (sama-sama return None) --
+        akibatnya read_record_set() diam-diam BERHENTI membaca di tengah
+        transmisi 1 pasien tanpa pernah kirim NAK, sisa record (P/O/R/L
+        setelah frame yang rusak) hilang tanpa jejak, dan MC-200 (yang masih
+        menunggu ACK/NAK utk frame yg baru dikirim) macet menunggu sampai
+        timeout lalu menyerah utk pasien itu -- persis gejala "1-2 dari 28
+        pasien selalu gagal, beda-beda mana yg gagal tiap percobaan" karena
+        checksum rusak/frame terpotong bisa kena pasien mana saja tergantung
+        jitter jaringan/timing saat itu. Lihat RESEARCH_LOG.md.
+        """
         b = self.read_byte()
         if b == EOT:
             return None
@@ -135,22 +165,52 @@ class AstmSession:
         raw = self.read_until(CR + LF)
         raw = raw[:-2]  # buang trailing CRLF
         parsed = parse_frame(raw)
+        if parsed is None:
+            raise AstmFrameError(f"Frame korup/tidak valid (checksum atau format salah): {raw!r}")
         return parsed
 
-    def read_record_set(self, max_frames: int = 200) -> list[str]:
+    def read_record_set(self, max_frames: int = 2000) -> list[str]:
         """
-        Baca semua frame sampai EOT, kirim ACK per frame valid, NAK kalau checksum salah.
+        Baca semua frame sampai EOT, kirim ACK per frame valid, NAK kalau
+        frame korup (lalu tunggu MC-200 retransmit -- TIDAK berhenti baca).
         Return list of text (urut).
+
+        `max_frames` cuma jaring pengaman terakhir (dulu 200 -- angka
+        sembarang yang bisa kepotong duluan sebelum EOT beneran utk batch
+        besar, mis. worklist Prolanis 9-test x puluhan pasien dalam 1
+        transmisi; sekarang jauh lebih longgar & GAGAL EKSPLISIT/berisik
+        kalau benar-benar kena, bukan diam-diam motong data spt sebelumnya).
         """
         texts: list[str] = []
-        for _ in range(max_frames):
-            parsed = self.read_one_frame()
+        consecutive_bad_frames = 0
+        frame_count = 0
+        while frame_count < max_frames:
+            try:
+                parsed = self.read_one_frame()
+            except AstmFrameError as e:
+                consecutive_bad_frames += 1
+                log.warning(
+                    "Frame korup, kirim NAK supaya MC-200 retransmit (percobaan ke-%d): %s",
+                    consecutive_bad_frames, e,
+                )
+                if consecutive_bad_frames > 5:
+                    raise AstmProtocolError(
+                        f"5 frame korup berturut-turut, koneksi kemungkinan rusak: {e}"
+                    ) from e
+                self.send_nak()
+                continue
+
+            consecutive_bad_frames = 0
             if parsed is None:
-                break
+                return texts  # EOT beneran, transmisi selesai normal
             fn, text = parsed
             self.send_ack()
             texts.append(text)
-        return texts
+            frame_count += 1
+
+        raise AstmProtocolError(
+            f"Melebihi {max_frames} frame dalam 1 transmisi tanpa EOT -- kemungkinan loop protokol tak wajar."
+        )
 
     # ---- sender-side primitives ----------------------------------------
     def send_enq_and_wait_ack(self, retries: int = 3) -> bool:

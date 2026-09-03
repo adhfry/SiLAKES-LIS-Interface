@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 import astm_records as R
 import settings as _settings
 import silakes_client as api
-from astm_protocol import AstmSession
+from astm_protocol import AstmProtocolError, AstmSession
 
 log = logging.getLogger("bridge")
 
@@ -458,6 +458,12 @@ class BridgeService:
                 if not grouped["Q"] and not grouped["R"]:
                     log.info("Record set dari %s tidak berisi Q maupun R (mis. cek koneksi H/L saja).", addr)
 
+        except AstmProtocolError as e:
+            # Jaring pengaman terakhir di astm_protocol.py (frame korup
+            # berturut-turut, atau transmisi tidak pernah EOT) -- WAJIB
+            # kelihatan sbg error, bukan noise info spt penutupan normal.
+            log.error("Protokol ASTM tidak wajar di koneksi %s, koneksi ditutup: %s", addr, e)
+            api.post_monitor_event("error", f"Bridge menutup koneksi dari {addr} krn kondisi protokol tak wajar: {e}")
         except ConnectionError as e:
             log.info("Koneksi %s ditutup oleh MC-200: %s", addr, e)
         except socket.timeout:
